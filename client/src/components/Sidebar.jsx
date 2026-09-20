@@ -38,7 +38,7 @@ const Sidebar = ({ onSelectUser }) => {
           <div className="avatar">A</div>
 
           <div>
-            <h2>ChatFlow</h2>
+            <h2>ChatsApp</h2>
             <span>My Account</span>
           </div>
         </div>

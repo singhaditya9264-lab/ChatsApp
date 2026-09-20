@@ -62,6 +62,14 @@ const Chat = ({ user }) => {
         const messageResponse = await API.get(
           `/messages/${chatData._id}`
         );
+        console.log(
+          "MESSAGES FROM DATABASE:",
+          messageResponse.data.map((message) => ({
+            id: message._id,
+            text: message.text,
+            status: message.status,
+          }))
+        );
 
         setMessages(messageResponse.data);
       } catch (error) {
@@ -148,18 +156,22 @@ const Chat = ({ user }) => {
     // ========================================
 
     const handleTyping = (data) => {
+      console.log("TYPING RECEIVED:", data);
+
       if (
-        String(data.userId) ===
-        String(user?._id)
+        String(data.userId) === String(user?._id) &&
+        String(data.chatId) === String(chat?._id)
       ) {
         setIsTyping(true);
       }
     };
 
     const handleStopTyping = (data) => {
+      console.log("STOP TYPING RECEIVED:", data);
+
       if (
-        String(data.userId) ===
-        String(user?._id)
+        String(data.userId) === String(user?._id) &&
+        String(data.chatId) === String(chat?._id)
       ) {
         setIsTyping(false);
       }
@@ -223,7 +235,7 @@ const Chat = ({ user }) => {
         sendUserOnline
       );
     };
-  }, [currentUserId, user?._id]);
+  }, [currentUserId]);
   // ========================================
   // JOIN CHAT ROOM
   // ========================================
@@ -287,6 +299,58 @@ const Chat = ({ user }) => {
 
 
   // ========================================
+  // MESSAGE DELIVERED
+  // ========================================
+
+  useEffect(() => {
+    const handleMessageDelivered = (data) => {
+      console.log("MESSAGE DELIVERED EVENT:", data);
+
+      // Do NOT mark as delivered if receiver is offline
+      const receiverIsOnline =
+        user?._id &&
+        onlineUsers.has(String(user._id));
+
+      console.log(
+        "RECEIVER ONLINE:",
+        receiverIsOnline
+      );
+
+      if (!receiverIsOnline) {
+        console.log(
+          "❌ Ignoring delivered event because receiver is offline"
+        );
+        return;
+      }
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          String(message._id) === String(data.messageId)
+            ? {
+              ...message,
+              status: "delivered",
+            }
+            : message
+        )
+      );
+    };
+
+    socket.on(
+      "messageDelivered",
+      handleMessageDelivered
+    );
+
+    return () => {
+      socket.off(
+        "messageDelivered",
+        handleMessageDelivered
+      );
+    };
+  }, [user?._id, onlineUsers]);
+
+
+
+  // ========================================
   // AUTO SCROLL
   // ========================================
 
@@ -294,8 +358,7 @@ const Chat = ({ user }) => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
     });
-  }, [messages]);
-
+  }, [messages, isTyping]);
   // ========================================
   // SEND MESSAGE
   // ========================================
@@ -309,6 +372,12 @@ const Chat = ({ user }) => {
       return;
     }
 
+    // Stop typing indicator
+    socket.emit("stopTyping", {
+      userId: currentUserId,
+      chatId: chat._id,
+    });
+
     try {
       const response = await API.post(
         "/messages",
@@ -319,6 +388,12 @@ const Chat = ({ user }) => {
       );
 
       const newMessage = response.data;
+
+      console.log("========== NEW MESSAGE ==========");
+      console.log("MESSAGE ID:", newMessage._id);
+      console.log("MESSAGE STATUS FROM API:", newMessage.status);
+      console.log("SOCKET CONNECTED:", socket.connected);
+      console.log("SOCKET ID:", socket.id);
 
       // Add immediately to current user's UI
       setMessages((prev) => {
@@ -359,7 +434,7 @@ const Chat = ({ user }) => {
     return (
       <div className="chat empty-chat">
         <h2>
-          Welcome to ChatFlow 👋
+          Welcome to ChatsApp 👋
         </h2>
 
         <p>
@@ -396,12 +471,18 @@ const Chat = ({ user }) => {
 
           <span
             className={
-              isUserOnline
-                ? "online-status"
-                : "offline-status"
+              isTyping
+                ? "typing-status"
+                : isUserOnline
+                  ? "online-status"
+                  : "offline-status"
             }
           >
-            {isUserOnline ? "online" : "offline"}
+            {isTyping
+              ? "typing..."
+              : isUserOnline
+                ? "online"
+                : "offline"}
           </span>
         </div>
 
@@ -426,9 +507,6 @@ const Chat = ({ user }) => {
         ) : (
           messages.map((message) => {
 
-            // Sender can be:
-            // populated object OR ObjectId string
-
             const senderId =
               message.sender?._id ||
               message.sender;
@@ -449,61 +527,52 @@ const Chat = ({ user }) => {
               <div
                 key={message._id}
                 className={`message-row ${isMine
-                    ? "sent-row"
-                    : "received-row"
+                  ? "sent-row"
+                  : "received-row"
                   }`}
               >
-
                 <div
                   className={`message-bubble ${isMine
-                      ? "sent-bubble"
-                      : "received-bubble"
+                    ? "sent-bubble"
+                    : "received-bubble"
                     }`}
                 >
-
-                  {/* MESSAGE TEXT */}
-
-                  <p>
-                    {message.text}
-                  </p>
-
-
-                  {/* TIME + CHECK */}
+                  <p>{message.text}</p>
 
                   <div className="message-meta">
-
                     <span>
                       {new Date(
                         message.createdAt
-                      ).toLocaleTimeString(
-                        [],
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
 
                     {isMine && (
                       <span className="checks">
-                        ✓✓
+                        {message.status === "read"
+                          ? "🔵✓✓"
+                          : message.status === "delivered"
+                            ? "✓✓"
+                            : "✓"}
                       </span>
                     )}
-
                   </div>
-
                 </div>
-
               </div>
             );
           })
         )}
 
-        {/* Auto-scroll target */}
+        {/* TYPING INDICATOR */}
+        {isTyping && (
+          <div className="typing-indicator">
+            typing...
+          </div>
+        )}
 
-        <div
-          ref={messagesEndRef}
-        />
+        <div ref={messagesEndRef} />
 
       </div>
 
@@ -526,15 +595,21 @@ const Chat = ({ user }) => {
 
             setText(value);
 
-            if (value.trim()) {
+            console.log("TYPING:", {
+              userId: currentUserId,
+              chatId: chat?._id,
+              text: value,
+            });
+
+            if (value.trim() && chat?._id) {
               socket.emit("typing", {
                 userId: currentUserId,
-                chatId: chat?._id,
+                chatId: chat._id,
               });
-            } else {
+            } else if (chat?._id) {
               socket.emit("stopTyping", {
                 userId: currentUserId,
-                chatId: chat?._id,
+                chatId: chat._id,
               });
             }
           }}

@@ -3,6 +3,7 @@ const express = require("express");
 const {
   sendMessage,
   getMessages,
+  updateMessageStatus,
 } = require("../controllers/messageController");
 
 const protect = require("../middleware/authMiddleware");
@@ -15,6 +16,11 @@ router.get(
   "/:chatId",
   protect,
   getMessages
+);
+router.put(
+  "/:messageId/status",
+  protect,
+  updateMessageStatus
 );
 
 module.exports = router;

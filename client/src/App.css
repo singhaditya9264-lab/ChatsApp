@@ -713,4 +713,27 @@ button {
   color: #00a884 !important;
   font-size: 13px !important;
   font-weight: 600;
+}.typing-indicator {
+  align-self: flex-start;
+  margin: 5px 0;
+  padding: 8px 14px;
+  color: #8696a0;
+  font-size: 13px;
+  font-style: italic;
+}
+.typing-indicator {
+  align-self: flex-start;
+  margin: 8px 0;
+  padding: 8px 14px;
+  color: #00a884;
+  font-size: 13px;
+  font-weight: 600;
+  font-style: italic;
+}
+.typing-status {
+  display: block;
+  margin-top: 4px;
+  color: #00a884 !important;
+  font-size: 13px;
+  font-weight: 600;
 }

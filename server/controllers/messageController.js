@@ -84,7 +84,48 @@ const getMessages = async (req, res) => {
   }
 };
 
+
+const updateMessageStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const allowedStatuses = [
+      "sent",
+      "delivered",
+      "read",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid message status",
+      });
+    }
+
+    const message = await Message.findByIdAndUpdate(
+      req.params.messageId,
+      { status },
+      { new: true }
+    ).populate(
+      "sender",
+      "name email profilePic"
+    );
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    res.status(200).json(message);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to update message status",
+      error: error.message,
+    });
+  }
+};
 module.exports = {
   sendMessage,
   getMessages,
+  updateMessageStatus,
 };

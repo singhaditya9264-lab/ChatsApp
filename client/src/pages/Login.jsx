@@ -46,7 +46,7 @@ const Login = ({ onLogin }) => {
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1>ChatFlow</h1>
+        <h1>ChatsApp</h1>
 
         <p>Welcome back 👋</p>
 

@@ -6,6 +6,10 @@ require("dotenv").config();
 
 const connectDB = require("./config/db");
 
+
+const Chat = require("./models/Chat");
+const Message = require("./models/Message");
+
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const chatRoutes = require("./routes/chatRoutes");
@@ -44,6 +48,9 @@ const io = new Server(server, {
     origin: "http://localhost:5173",
     methods: ["GET", "POST"],
   },
+
+  pingInterval: 5000,
+  pingTimeout: 5000,
 });
 
 // Store currently online users
@@ -57,25 +64,25 @@ io.on("connection", (socket) => {
   // ========================================
 
   socket.on("userOnline", (userId) => {
-  const id = String(userId);
+    const id = String(userId);
 
-  socket.userId = id;
+    socket.userId = id;
 
-  onlineUsers.set(id, socket.id);
+    onlineUsers.set(id, socket.id);
 
-  console.log("User online:", id);
+    console.log("User online:", id);
 
-  // Send current online users to this user
-  socket.emit("onlineUsers", {
-    users: Array.from(onlineUsers.keys()),
+    // Send current online users to this user
+    socket.emit("onlineUsers", {
+      users: Array.from(onlineUsers.keys()),
+    });
+
+    // Tell everyone else this user is online
+    socket.broadcast.emit("userStatus", {
+      userId: id,
+      status: "online",
+    });
   });
-
-  // Tell everyone else this user is online
-  socket.broadcast.emit("userStatus", {
-    userId: id,
-    status: "online",
-  });
-});
 
   // ========================================
   // JOIN CHAT
@@ -89,23 +96,19 @@ io.on("connection", (socket) => {
     );
   });
 
-  // ========================================
   // TYPING
-  // ========================================
-
   socket.on("typing", (data) => {
-    socket.broadcast.emit("typing", {
+    console.log("TYPING:", data);
+    socket.to(data.chatId).emit("typing", {
       userId: data.userId,
       chatId: data.chatId,
     });
   });
 
-  // ========================================
   // STOP TYPING
-  // ========================================
-
   socket.on("stopTyping", (data) => {
-    socket.broadcast.emit("stopTyping", {
+    console.log("STOP TYPING:", data);
+    socket.to(data.chatId).emit("stopTyping", {
       userId: data.userId,
       chatId: data.chatId,
     });
@@ -115,11 +118,115 @@ io.on("connection", (socket) => {
   // SEND MESSAGE
   // ========================================
 
-  socket.on("sendMessage", (message) => {
-    io.to(message.chat).emit(
-      "receiveMessage",
-      message
-    );
+  socket.on("sendMessage", async (message) => {
+    try {
+      const Chat = require("./models/Chat");
+      const Message = require("./models/Message");
+
+      const chatData = await Chat.findById(message.chat);
+
+      if (!chatData) {
+        console.log("CHAT NOT FOUND");
+        return;
+      }
+
+      const senderId = String(
+        message.sender?._id || message.sender
+      );
+
+      const receiverId = chatData.participants.find(
+        (id) => String(id) !== senderId
+      );
+
+      if (!receiverId) {
+        console.log("RECEIVER NOT FOUND");
+        return;
+      }
+
+      const receiverIdString = String(receiverId);
+      console.log("========== RECEIVER DEBUG ==========");
+      console.log(
+        "CHAT PARTICIPANTS:",
+        chatData.participants.map((id) => String(id))
+      );
+      console.log("SENDER ID:", senderId);
+      console.log("RECEIVER ID:", receiverIdString);
+      console.log(
+        "ONLINE USERS:",
+        Array.from(onlineUsers.entries())
+      );
+      console.log("====================================");
+      console.log("========== MESSAGE STATUS CHECK ==========");
+      console.log("MESSAGE:", message._id);
+      console.log("SENDER:", senderId);
+      console.log("RECEIVER:", receiverIdString);
+
+      const receiverSocketId =
+        onlineUsers.get(receiverIdString);
+
+      console.log(
+        "RECEIVER SOCKET ID:",
+        receiverSocketId
+      );
+
+      const receiverSocket = receiverSocketId
+        ? io.sockets.sockets.get(receiverSocketId)
+        : null;
+
+      console.log(
+        "RECEIVER SOCKET EXISTS:",
+        !!receiverSocket
+      );
+
+      // Send message to chat
+      io.to(message.chat).emit(
+        "receiveMessage",
+        message
+      );
+
+      if (receiverSocket) {
+        // Receiver is genuinely connected
+        await Message.findByIdAndUpdate(
+          message._id,
+          {
+            status: "delivered",
+          }
+        );
+
+        console.log("✅ MESSAGE DELIVERED");
+
+        const senderSocketId =
+          onlineUsers.get(senderId);
+
+        if (senderSocketId) {
+          io.to(senderSocketId).emit(
+            "messageDelivered",
+            {
+              messageId: message._id,
+            }
+          );
+        }
+      } else {
+        // Receiver is offline
+        await Message.findByIdAndUpdate(
+          message._id,
+          {
+            status: "sent",
+          }
+        );
+
+        console.log("❌ RECEIVER OFFLINE");
+        console.log("MESSAGE REMAINS SENT");
+      }
+
+      console.log("==========================================");
+
+    } catch (error) {
+      console.error(
+        "SEND MESSAGE SOCKET ERROR:",
+        error.message
+      );
+    }
   });
 
   // ========================================

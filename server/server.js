@@ -95,6 +95,56 @@ io.on("connection", (socket) => {
       `Socket ${socket.id} joined chat: ${chatId}`
     );
   });
+  // ========================================
+// MARK MESSAGES AS READ
+// ========================================
+
+socket.on("markMessagesRead", async (data) => {
+  try {
+    const { chatId, userId } = data;
+
+    console.log("📖 MARK MESSAGES READ:", {
+      chatId,
+      userId,
+    });
+
+    if (!chatId || !userId) {
+      console.log("❌ Missing chatId or userId");
+      return;
+    }
+
+    // Mark messages sent by the other user as read
+    const result = await Message.updateMany(
+      {
+        chat: chatId,
+        sender: { $ne: userId },
+        status: { $ne: "read" },
+      },
+      {
+        $set: {
+          status: "read",
+        },
+      }
+    );
+
+    console.log(
+      "✅ MESSAGES MARKED READ:",
+      result.modifiedCount
+    );
+
+    // Notify everyone in this chat that messages were read
+    io.to(String(chatId)).emit("messagesRead", {
+      chatId: String(chatId),
+      userId: String(userId),
+    });
+
+  } catch (error) {
+    console.error(
+      "MARK MESSAGES READ ERROR:",
+      error.message
+    );
+  }
+});
 
   // TYPING
   socket.on("typing", (data) => {

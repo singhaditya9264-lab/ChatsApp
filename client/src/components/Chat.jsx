@@ -71,7 +71,21 @@ const Chat = ({ user }) => {
           }))
         );
 
-        setMessages(messageResponse.data);
+        setMessages((prev) => {
+          const combined = [...prev, ...messageResponse.data];
+
+          const uniqueMessages = combined.filter(
+            (message, index, array) =>
+              index ===
+              array.findIndex(
+                (msg) =>
+                  String(msg._id) ===
+                  String(message._id)
+              )
+          );
+
+          return uniqueMessages;
+        });
       } catch (error) {
         console.error(
           "Failed to load chat:",
@@ -251,62 +265,139 @@ const Chat = ({ user }) => {
   // ========================================
   // RECEIVE REAL-TIME MESSAGE
   // ========================================
+  // ========================================
+  // RECEIVE REAL-TIME MESSAGE
+  // ========================================
 
   useEffect(() => {
-    const receiveMessage = (message) => {
-      if (!message) return;
+    const handleReceiveMessage = (message) => {
+      console.log("📨 RECEIVE MESSAGE EVENT:", message);
 
-      // Get chat ID from received message
+      if (!message) {
+        console.log("❌ MESSAGE IS EMPTY");
+        return;
+      }
+
       const messageChatId =
         message.chat?._id || message.chat;
 
-      // Ignore messages from another chat
+      console.log(
+        "MESSAGE CHAT ID:",
+        String(messageChatId)
+      );
+
+      console.log(
+        "CURRENT CHAT ID:",
+        String(chat?._id)
+      );
+
+      // Check whether message belongs to current chat
       if (
         String(messageChatId) !==
         String(chat?._id)
       ) {
+        console.log(
+          "❌ MESSAGE CHAT DOES NOT MATCH"
+        );
         return;
       }
 
+      console.log(
+        "✅ MESSAGE CHAT MATCHED"
+      );
+
       setMessages((prev) => {
-        // Prevent duplicate message
         const alreadyExists = prev.some(
           (msg) =>
-            String(msg._id) === String(message._id)
+            String(msg._id) ===
+            String(message._id)
         );
 
         if (alreadyExists) {
+          console.log(
+            "⚠️ DUPLICATE MESSAGE IGNORED:",
+            message._id
+          );
+
           return prev;
         }
 
+        console.log(
+          "✅ ADDING REAL-TIME MESSAGE:",
+          message.text
+        );
+
         return [...prev, message];
       });
+
+      // Mark received message as read
+      const senderId =
+        message.sender?._id ||
+        message.sender;
+
+      console.log(
+        "MESSAGE SENDER ID:",
+        String(senderId)
+      );
+
+      console.log(
+        "CURRENT USER ID:",
+        String(currentUserId)
+      );
+
+      if (
+        String(senderId) !==
+        String(currentUserId)
+      ) {
+        console.log(
+          "📖 MARKING MESSAGE AS READ"
+        );
+
+        socket.emit("markMessagesRead", {
+          chatId: String(chat._id),
+          userId: String(currentUserId),
+        });
+      }
     };
+
+    console.log(
+      "👂 REGISTERING receiveMessage LISTENER"
+    );
 
     socket.on(
       "receiveMessage",
-      receiveMessage
+      handleReceiveMessage
     );
 
     return () => {
+      console.log(
+        "🧹 REMOVING receiveMessage LISTENER"
+      );
+
       socket.off(
         "receiveMessage",
-        receiveMessage
+        handleReceiveMessage
       );
     };
-  }, [chat?._id]);
-
+  }, [chat?._id, currentUserId]);
 
 
   // ========================================
-  // MESSAGE DELIVERED
+  // MESSAGE DELIVERED + READ
   // ========================================
 
   useEffect(() => {
-    const handleMessageDelivered = (data) => {
-      console.log("MESSAGE DELIVERED EVENT:", data);
 
-      // Do NOT mark as delivered if receiver is offline
+    // ========================================
+    // MESSAGE DELIVERED
+    // ========================================
+
+    const handleMessageDelivered = (data) => {
+      console.log(
+        "MESSAGE DELIVERED EVENT:",
+        data
+      );
+
       const receiverIsOnline =
         user?._id &&
         onlineUsers.has(String(user._id));
@@ -325,7 +416,8 @@ const Chat = ({ user }) => {
 
       setMessages((prev) =>
         prev.map((message) =>
-          String(message._id) === String(data.messageId)
+          String(message._id) ===
+            String(data.messageId)
             ? {
               ...message,
               status: "delivered",
@@ -335,19 +427,91 @@ const Chat = ({ user }) => {
       );
     };
 
+    // ========================================
+    // MESSAGE READ
+    // ========================================
+
+    const handleMessagesRead = (data) => {
+      console.log(
+        "🔵 MESSAGES READ EVENT:",
+        data
+      );
+
+      if (
+        String(data.chatId) !==
+        String(chat?._id)
+      ) {
+        console.log(
+          "❌ READ EVENT CHAT DOES NOT MATCH"
+        );
+        return;
+      }
+
+      console.log(
+        "✅ UPDATING MESSAGES TO READ"
+      );
+
+      setMessages((prev) =>
+        prev.map((message) => {
+          const senderId =
+            message.sender?._id ||
+            message.sender;
+
+          if (
+            String(senderId) ===
+            String(currentUserId)
+          ) {
+            return {
+              ...message,
+              status: "read",
+            };
+          }
+          console.log(
+            "🔵 MARKING MESSAGE READ:",
+            message._id
+          );
+
+          return message;
+        })
+      );
+    };
+
+    // ========================================
+    // SOCKET LISTENERS
+    // ========================================
+
     socket.on(
       "messageDelivered",
       handleMessageDelivered
     );
+
+    socket.on(
+      "messagesRead",
+      handleMessagesRead
+    );
+
+    // ========================================
+    // CLEANUP
+    // ========================================
 
     return () => {
       socket.off(
         "messageDelivered",
         handleMessageDelivered
       );
-    };
-  }, [user?._id, onlineUsers]);
 
+      socket.off(
+        "messagesRead",
+        handleMessagesRead
+      );
+    };
+
+  }, [
+    user?._id,
+    onlineUsers,
+    chat?._id,
+    currentUserId,
+  ]);
 
 
   // ========================================
@@ -522,6 +686,10 @@ const Chat = ({ user }) => {
                 senderEmail.toLowerCase() ===
                 currentUser.email.toLowerCase()
               );
+            console.log(
+              "🔵 MARKING MESSAGE READ:",
+              message._id
+            );
 
             return (
               <div

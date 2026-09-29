@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { io } from "socket.io-client";
 import API from "../services/api";
+import socket from "../services/socket";
 
-const socket = io("http://localhost:5000");
 
-console.log("SOCKET CREATED:", socket.id);
 
-socket.on("connect", () => {
-  console.log("SOCKET CONNECTED:", socket.id);
-});
+
 
 const Chat = ({ user }) => {
   const [chat, setChat] = useState(null);
@@ -249,7 +245,11 @@ const Chat = ({ user }) => {
         sendUserOnline
       );
     };
-  }, [currentUserId]);
+ }, [
+  currentUserId,
+  user?._id,
+  chat?._id,
+]);
   // ========================================
   // JOIN CHAT ROOM
   // ========================================

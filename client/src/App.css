@@ -737,3 +737,55 @@ button {
   font-size: 13px;
   font-weight: 600;
 }
+/* ========================================
+   CHAT ITEM
+======================================== */
+
+.chat-item {
+  position: relative;
+}
+
+
+/* ========================================
+   CHAT INFO
+======================================== */
+
+.chat-info {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+
+/* ========================================
+   UNREAD MESSAGE BADGE
+======================================== */
+
+.unread-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+
+  width: 22px;
+  height: 22px;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border-radius: 50% !important;
+
+  background: #25d366 !important;
+  color: #ffffff !important;
+
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 22px !important;
+
+  box-sizing: border-box;
+
+  z-index: 5;
+}

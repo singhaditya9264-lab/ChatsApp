@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import socket from "../services/socket";
+;
 
 const Sidebar = ({ onSelectUser }) => {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-
+  const [unreadCounts, setUnreadCounts] = useState({});
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -22,6 +24,34 @@ const Sidebar = ({ onSelectUser }) => {
     };
 
     fetchUsers();
+  }, []);
+
+
+  useEffect(() => {
+    const handleUnreadMessage = (data) => {
+      console.log("🔔 SIDEBAR HANDLER CALLED:", data);
+
+      const message = data.message;
+
+      if (!message) return;
+
+      const senderId =
+        message.sender?._id || message.sender;
+
+      if (!senderId) return;
+
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [String(senderId)]:
+          (prev[String(senderId)] || 0) + 1,
+      }));
+    };
+
+    socket.on("unreadMessage", handleUnreadMessage);
+
+    return () => {
+      socket.off("unreadMessage", handleUnreadMessage);
+    };
   }, []);
 
   const filteredUsers = users.filter((user) =>
@@ -78,7 +108,14 @@ const Sidebar = ({ onSelectUser }) => {
             <div
               className="chat-item"
               key={user._id}
-              onClick={() => onSelectUser(user)}
+              onClick={() => {
+                setUnreadCounts((prev) => ({
+                  ...prev,
+                  [String(user._id)]: 0,
+                }));
+
+                onSelectUser(user);
+              }}
             >
 
               <div className="avatar">
@@ -96,6 +133,12 @@ const Sidebar = ({ onSelectUser }) => {
                     ).toLocaleDateString()}
                   </span>
                 </div>
+
+                {unreadCounts[String(user._id)] > 0 && (
+                  <span className="unread-badge">
+                    {unreadCounts[String(user._id)]}
+                  </span>
+                )}
 
                 <p>{user.status}</p>
 
